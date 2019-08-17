@@ -1,0 +1,677 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Aug 17 17:03:37 2019
+
+@author: jmattimoe
+"""
+
+# Lets load the CSV Chicago Food Inspections dataset into a dataframe
+
+import pandas as pd
+
+df = pd.read_csv("Chicago_Food_Inspections.csv")
+
+df.head()
+
+# Import Elascticsearch and helpers from  elasticsearch
+
+from elasticsearch import Elasticsearch, helpers 
+
+
+es=Elasticsearch('http://student:spsdata@129.105.88.91:9200')
+
+# Experiment #1: Create the query using regex
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, # same as where clasue in SQL
+
+                
+                              {"query_string": {
+                                            "query": "*Children*",
+                                            "fields": ["Facility Type","Violations","DBA Name"] 
+                                             }
+                            }
+                              
+           
+                            ]              
+                   }
+                }
+        }
+
+results = es.search(index='food_inspections', body=query, scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+print('sid = ', sid)
+print('Scroll Size = ', scroll_size)
+
+type(results)
+
+results
+
+# Process the retrieved documents and filter fields we need for the Heatmap
+
+results['hits']['hits']
+
+len(results['hits']['hits'])
+
+count = 0
+list_of_lAT_LONG_pairs = []
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:                   #Iterating each  results of  the qurey 
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))    #Appending Latitude and Longitude into the list
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')    
+    sid = results['_scroll_id']                                 #Changing the scroll-id
+    scroll_size = len(results['hits']['hits'])  
+    
+print("the total number of match with children using wild card:",count)
+
+document.keys()
+
+list_of_lAT_LONG_pairs[:3]
+
+len(list_of_lAT_LONG_pairs)
+
+# We need to install folium package to plot the Map and Heatmaps
+
+import folium
+from folium import plugins
+
+print(folium.__version__)
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+# Create the HeatMap
+# Lets plot the query matches on Chicago HeatMap
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Experiment #2: We will first build our query with the parameters:
+# "query": "Children",
+# "fuzziness": "1",
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, 
+
+                            {"query_string": {
+                                            "query": "Children",
+                                            "fuzziness": "1",
+                                            "fields": ["Facility Type","Violations","DBA Name"]
+                                             }
+                            }
+           
+                            ]              
+                   }
+                }
+        }
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+count = 0
+list_of_lAT_LONG_pairs = []
+
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        #defensive coding to ensure we have the fields in the inspection documents
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')
+    sid = results['_scroll_id']
+    scroll_size = len(results['hits']['hits'])  
+    
+print("Total number of query matches with children using fuziness:",count)
+
+# Experiment #3: Lets now build our query with the parameters:
+# "query": "Children's",
+# "fuzziness": "1",
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, # same as where clasue in SQL
+
+                            {"query_string": {
+                                            "query": "Children's",
+                                            "fuzziness": "1",
+                                            "fields": ["Facility Type","Violations","DBA Name"]
+                                             }
+                            }
+           
+                            ]              
+                   }
+                }
+        }
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+count = 0
+list_of_lAT_LONG_pairs = []
+
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')
+    sid = results['_scroll_id']
+    scroll_size = len(results['hits']['hits'])
+    
+print("Total number of match with Children's using fuziness:",count)
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+# Lets plot the  query matches for  "Children's" on Chicago HeatMap
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Experiment #4: Lets get the top list of frequent violators:
+# Facilities that serve children can be classified under different Facility Types:
+
+# Daycare Above and Under 2 Years
+# Children's Services Facility
+# Daycare (2 - 6 Years)
+# Use ELasticSearch and Folium to plot on the map those facilities that failed inspection at least 5 times with risk high.
+
+query ={
+      'size' : 10000,
+      'query': {
+          "bool" : {
+              "should":[    {'match' : {'Facility Type': {"query" : 'Daycare (2 - 6 Years)',"operator":"and"}}},
+                            {'match' : {'Facility Type':{"query" : 'Daycare Above and Under 2 Years',"operator": "and"}}},
+                            {'match' : {'Facility Type':{"query" : 'CHILDRENS SERVICES FACILITY',"operator" : "and"}}},
+                       ],
+                       "minimum_should_match" : 1,
+                       "filter" : [{"match" : {'Results': {"query": 'Fail', "operator": "and"}}},
+                                   {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}}}
+                                  ]
+                
+             }
+      },
+      "aggs" : {
+          "selected_dbas" :{
+                          "terms" : {
+                                        "field" : "DBA Name.keyword",
+                                        "min_doc_count": 5,
+                                        "size" :10000
+                                       
+                                     },
+                          "aggs": {
+                              "top_dba_hits": {
+                                  "top_hits": {
+                                  "size": 10
+                                  }
+                              }
+                }
+          
+          
+        }
+    }
+}
+
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+results
+
+list_of_lAT_LONG_pairs = []
+
+for dba_bucket in results["aggregations"]["selected_dbas"]["buckets"]:
+    if "top_dba_hits" in dba_bucket and "hits" in dba_bucket["top_dba_hits"] and "hits" in dba_bucket["top_dba_hits"]["hits"]:
+        
+        for hit in dba_bucket["top_dba_hits"]["hits"]["hits"]:
+            
+            if "_source" in hit:
+               
+                if "Latitude" in hit["_source"] and "Longitude" in hit["_source"]:
+                    list_of_lAT_LONG_pairs.append([hit["_source"]["Latitude"], hit["_source"]["Longitude"]])
+                    
+row_index =0
+df_top_frequent_violators = pd.DataFrame()
+for dba_bucket in results["aggregations"]["selected_dbas"]["buckets"]:
+    if "top_dba_hits" in dba_bucket and "hits" in dba_bucket["top_dba_hits"] and "hits" in dba_bucket["top_dba_hits"]["hits"]:
+        doc_count = dba_bucket['doc_count']
+        for hit in dba_bucket["top_dba_hits"]["hits"]["hits"]:
+            score = hit['_score']
+            if "_source" in hit:
+                row_index += 1
+                df_frequent_violator = pd.DataFrame(hit['_source'],index =[row_index])
+                df_frequent_violator['doc_count'] = doc_count
+                df_frequent_violator['score'] = score
+                df_top_frequent_violators = df_top_frequent_violators.append(df_frequent_violator)
+                
+df_top_frequent_violators
+
+# Lets print the number of violations for every DBA NAME
+
+df_top_frequent_violators['DBA Name'].value_counts()
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+# Lets plot the top frequent violators on Chicago HeatMap
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Rerun Experiments #1, #2, #3 but searching for "Child" matches   
+
+# Experiment No. 1
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, # same as where clasue in SQL
+
+                
+                              {"query_string": {
+                                            "query": "*Child*",  #using regex of children  to match all posssible combinations of "Children"
+                                            "fields": ["Facility Type","Violations","DBA Name"] #Multi-field matching query
+                                             }
+                            }
+                              
+           
+                            ]              
+                   }
+                }
+        }
+                                      
+results = es.search(index='food_inspections', body=query, scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+print('sid = ', sid)
+print('Scroll Size = ', scroll_size)
+
+type(results)
+
+results
+
+results['hits']['hits']
+
+len(results['hits']['hits'])
+
+count = 0
+list_of_lAT_LONG_pairs = []
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:                   #Iterating each  results of  the qurey 
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        #defensive coding to ensure we have the fields in the inspection documents
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))    #Appending Latitude and Longitude into the list
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')    
+    sid = results['_scroll_id']                                 #Changing the scroll-id
+    scroll_size = len(results['hits']['hits'])  
+    
+print("the total number of match with child using wild card:",count)
+
+document.keys()
+
+list_of_lAT_LONG_pairs[:3]
+
+len(list_of_lAT_LONG_pairs)
+
+import folium
+from folium import plugins
+
+print(folium.__version__)
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Experiment No. 2
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, # same as where clasue in SQL
+
+                            {"query_string": {
+                                            "query": "Child",
+                                            "fuzziness": "1",
+                                            "fields": ["Facility Type","Violations","DBA Name"]
+                                             }
+                            }
+           
+                            ]              
+                   }
+                }
+        }
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+count = 0
+list_of_lAT_LONG_pairs = []
+
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        #defensive coding to ensure we have the fields in the inspection documents
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')
+    sid = results['_scroll_id']
+    scroll_size = len(results['hits']['hits'])  
+    
+print("Total number of query matches with Child using fuziness:",count)
+
+# Experiment No. 3
+
+query = {
+        'size' : 10000,
+        'query': {
+            'bool': {
+                    'must' : [{'match' : {'Results': 'Fail'}}, {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}} }, # same as where clasue in SQL
+
+                            {"query_string": {
+                                            "query": "Child",
+                                            "fuzziness": "1",
+                                            "fields": ["Facility Type","Violations","DBA Name"]
+                                             }
+                            }
+           
+                            ]              
+                   }
+                }
+        }
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+count = 0
+list_of_lAT_LONG_pairs = []
+
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        #defensive coding to ensure we have the fields in the inspection documents
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')
+    sid = results['_scroll_id']
+    scroll_size = len(results['hits']['hits'])
+    
+print("Total number of match with Child using fuziness:",count)
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+# Lets plot the  query matches for  "Children's" on Chicago HeatMap
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Requirement #3:
+# produce a table that shows DBA Name, number of violations and number of licenses issued for every DBA Name
+
+query ={
+      'size' : 10000,
+      'query': {
+          "bool" : {
+              "should":[    {'match' : {'Facility Type': {"query" : 'Daycare (2 - 6 Years)',"operator":"and"}}},
+                            {'match' : {'Facility Type':{"query" : 'Daycare Above and Under 2 Years',"operator": "and"}}},
+                            {'match' : {'Facility Type':{"query" : 'CHILDRENS SERVICES FACILITY',"operator" : "and"}}},
+                       ],
+                       "minimum_should_match" : 1,
+                       "filter" : [{"match" : {'Results': {"query": 'Fail', "operator": "and"}}},
+                                   {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}}}
+                                  ]
+                
+             }
+      },
+      "aggs" : {
+          "selected_dbas" :{
+                          "terms" : {
+                                        "field" : "DBA Name.keyword",
+                                        "min_doc_count": 5,
+                                        "size" :10000
+                                       
+                                     },
+                          "aggs": {
+                              "top_dba_hits": {
+                                  "top_hits": {
+                                  "size": 10
+                                  }
+                              }
+                }
+          
+          
+        }
+    }
+}
+
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+results
+
+list_of_lAT_LONG_pairs = []
+
+for dba_bucket in results["aggregations"]["selected_dbas"]["buckets"]:
+    if "top_dba_hits" in dba_bucket and "hits" in dba_bucket["top_dba_hits"] and "hits" in dba_bucket["top_dba_hits"]["hits"]:
+        
+        for hit in dba_bucket["top_dba_hits"]["hits"]["hits"]:
+            
+            if "_source" in hit:
+               
+                if "Latitude" in hit["_source"] and "Longitude" in hit["_source"]:
+                    list_of_lAT_LONG_pairs.append([hit["_source"]["Latitude"], hit["_source"]["Longitude"]])
+                    
+                    
+# Lets dumps the LAt and LONG 
+# list_of_lAT_LONG_pairs
+                    
+# Lets dump the hits per bucket into a datframe object for all buckets
+
+row_index =0
+df_top_frequent_violators = pd.DataFrame()
+for dba_bucket in results["aggregations"]["selected_dbas"]["buckets"]:
+    if "top_dba_hits" in dba_bucket and "hits" in dba_bucket["top_dba_hits"] and "hits" in dba_bucket["top_dba_hits"]["hits"]:
+        doc_count = dba_bucket['doc_count']
+        for hit in dba_bucket["top_dba_hits"]["hits"]["hits"]:
+            score = hit['_score']
+            if "_source" in hit:
+                row_index += 1
+                df_frequent_violator = pd.DataFrame(hit['_source'],index =[row_index])
+                df_frequent_violator['doc_count'] = doc_count
+                df_frequent_violator['score'] = score
+                df_top_frequent_violators = df_top_frequent_violators.append(df_frequent_violator)
+                
+df_top_frequent_violators
+
+# Lets print the number of violations for every DBA NAME
+
+df_top_frequent_violators['DBA Name'].value_counts('License #')
+                         
+df_top_frequent_violators['DBA Name'].value_counts('Violations')
+
+# Requirement #4:
+# Use the results of Experiment #4 to plot on the Heatmap those frequent violators who have obtained 3 business licenses or more under the same DBA Name through out the liftime of their business
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+# Lets plot the top frequent violators on Chicago HeatMap
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
+
+# Requirement #5:
+# Plot on the Heatmap those facilites that serve children but failed inspections with high risk, and MICE DROPPINGS were OBSERVED in the Violations; you have to execlude violations that stated NO MICE DROPPINGS were OBSERVED
+
+query ={
+      'size' : 10000,
+      'query': {
+          "bool" : {
+              "should":[    {'match' : {'Facility Type': {"query" : 'Daycare (2 - 6 Years)',"operator":"and"}}},
+                            {'match' : {'Facility Type':{"query" : 'Daycare Above and Under 2 Years',"operator": "and"}}},
+                            {'match' : {'Facility Type':{"query" : 'CHILDRENS SERVICES FACILITY',"operator" : "and"}}},
+                       ],
+                       "minimum_should_match" : 1,
+                       "filter" : [{"match" : {'Violations': {"query": '*MICE DROPPINGS*', "operator": "and"}}},
+                                   {"match" : {'Risk': {"query": 'Risk 1 (High)', "operator": "and"}}}
+                                  ]
+                
+             }
+      },
+      "aggs" : {
+          "selected_dbas" :{
+                          "terms" : {
+                                        "field" : "DBA Name.keyword",
+                                        "min_doc_count": 5,
+                                        "size" :10000
+                                       
+                                     },
+                          "aggs": {
+                              "top_dba_hits": {
+                                  "top_hits": {
+                                  "size": 10
+                                  }
+                              }
+                }
+          
+          
+        }
+    }
+}
+
+results = es.search(index='food_inspections', body=query,scroll='1h')
+
+sid = results['_scroll_id']
+scroll_size = results['hits']['total']
+
+print('sid = ', sid)
+print('Scroll Size = ', scroll_size)
+
+type(results)
+
+results['hits']['hits']
+
+len(results['hits']['hits'])
+
+count = 0
+list_of_lAT_LONG_pairs = []
+while(scroll_size > 0):
+
+    for inspection in results['hits']['hits']:                   #Iterating each  results of  the qurey 
+        current_location_lAT_LONG = []
+        document = inspection['_source']
+        count = count +1
+        
+        #defensive coding to ensure we have the fields in the inspection documents
+        if 'Latitude' in document.keys():
+            if 'Longitude' in document.keys():
+                if 'Address' in document.keys():
+                    if(document['Latitude'] != None and document['Longitude'] != None  and document['Address'] != None):
+                        current_location_lAT_LONG.append(float(document['Latitude']))    #Appending Latitude and Longitude into the list
+                        current_location_lAT_LONG.append(float(document['Longitude']))
+                        list_of_lAT_LONG_pairs.append(current_location_lAT_LONG)
+                        
+    results = es.scroll(scroll_id = sid, scroll = '2m')    
+    sid = results['_scroll_id']                                 #Changing the scroll-id
+    scroll_size = len(results['hits']['hits'])  
+    
+print("the total number of match with mice droppings using wild card:",count)
+
+list_of_lAT_LONG_pairs
+
+len(list_of_lAT_LONG_pairs)
+
+import folium
+from folium import plugins
+
+print(folium.__version__)
+
+chicago_map = folium.Map([41.90293279, -87.70769386], zoom_start=11)
+chicago_map
+
+chicago_map.add_child(plugins.HeatMap(list_of_lAT_LONG_pairs, radius=15))
+chicago_map
